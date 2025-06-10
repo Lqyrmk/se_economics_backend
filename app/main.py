@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 
-from routers import items, hero, estimation
+from routers import estimation
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.dependencies import create_db_and_tables
@@ -14,8 +14,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(items.router)
-app.include_router(hero.router)
 app.include_router(estimation.router)
 
 origins = [
