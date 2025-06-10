@@ -15,6 +15,17 @@ router = APIRouter(
 )
 
 
+@router.get("/", response_model=list[EstimationPublic])
+def read_estimations(
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+):
+    estimations = session.exec(select(Estimation).offset(offset).limit(limit)).all()
+    print(f"Estimations: {estimations}")
+    return estimations
+
+
 def common_db_post(res: float, estimation: EstimationBase, session: SessionDep) -> EstimationPublic:
     db_estimation = Estimation.model_validate(estimation)
     db_estimation.effort = res
