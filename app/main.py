@@ -1,14 +1,23 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 
 from typing import Union
+from routers import items, hero
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.dependencies import create_db_and_tables
 
-from routers import items
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
+# app = FastAPI()
 
 app.include_router(items.router)
+app.include_router(hero.router)
 
 origins = [
     "http://localhost",
