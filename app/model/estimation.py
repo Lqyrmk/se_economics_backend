@@ -12,6 +12,7 @@ class Estimation(EstimationBase, table=True):
     complexity: Optional[str] = Field(default="medium")  # low/medium/high
     experience: Optional[int] = Field(default=3, ge=0)
     effort: Optional[float] = Field(default=None)
+    time: Optional[float] = Field(default=None)
 
 class CocomoCreate(EstimationBase):
     method: Optional[str] = Field(default="cocomo")
@@ -41,3 +42,4 @@ class EstimationPublic(EstimationBase):
     id: int
     method: str
     effort: float
+    time: float

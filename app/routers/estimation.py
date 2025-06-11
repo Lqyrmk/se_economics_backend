@@ -1,4 +1,4 @@
-from typing import Annotated, List, Tuple
+from typing import Annotated, List, Tuple, Dict
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
@@ -17,35 +17,41 @@ router = APIRouter(
 
 @router.get("/", response_model=list[EstimationPublic])
 def read_estimations(
-    session: SessionDep,
-    offset: int = 0,
-    limit: Annotated[int, Query(le=100)] = 100,
+        session: SessionDep,
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
 ):
     estimations = session.exec(select(Estimation).offset(offset).limit(limit)).all()
     print(f"Estimations: {estimations}")
     return estimations
 
 
-def common_db_post(res: float, estimation: EstimationBase, session: SessionDep) -> EstimationPublic:
+def common_db_post(res: Dict, estimation: EstimationBase, session: SessionDep) -> EstimationPublic:
     db_estimation = Estimation.model_validate(estimation)
-    db_estimation.effort = res
+    db_estimation.effort = res['effort']
+    db_estimation.time = res['time']
     # write to database
     session.add(db_estimation)
     session.commit()
     session.refresh(db_estimation)
     return db_estimation
 
-# 1. Empirical Estimation
-def cocomo_model(kloc: float, complexity: str) -> float:
-    params = {
-        "low": (2.4, 1.05),
-        "medium": (3.0, 1.12),
-        "high": (3.6, 1.20)
-    }
-    a, b = params.get(complexity, params["medium"])
-    effort = a * (kloc ** b)
 
-    return effort  # 单位：人月
+# 1. Empirical Estimation
+def cocomo_model(kloc: float, complexity: str) -> Dict:
+    params = {
+        "organic": (2.4, 1.05, 2.5, 0.38),
+        "semi": (3.0, 1.12, 2.5, 0.35),
+        "embedded": (3.6, 1.20, 2.5, 0.32)
+    }
+    a, b, c, d = params.get(complexity, params["organic"])
+    effort = a * (kloc ** b)
+    time = c * (effort ** d)
+    res = {
+        "effort": effort,
+        "time": time,
+    }
+    return res
 
 
 @router.post("/empirical/cocomo", response_model=EstimationPublic)
@@ -55,12 +61,13 @@ def cocomo_estimate(estimation: CocomoCreate, session: SessionDep) -> Estimation
     参数a, b根据complexity调整
     """
     # calculate
-    effort = cocomo_model(estimation.size, estimation.complexity)
+    res = cocomo_model(estimation.size, estimation.complexity)
     # database
-    db_estimation = common_db_post(effort, estimation, session)
+    db_estimation = common_db_post(res, estimation, session)
     return db_estimation
 
-def function_points_model(fp: float, complexity: str) -> float:
+
+def function_points_model(fp: float, complexity: str) -> Dict:
     """
     功能点估算：
     Effort = FP * multiplier
@@ -73,18 +80,24 @@ def function_points_model(fp: float, complexity: str) -> float:
     }
     multiplier = multipliers.get(complexity, 1.2)
     effort = fp * multiplier
-    return effort  # 人月
+    res = {
+        "effort": effort,
+        "time": -1,
+    }
+    return res
+
 
 @router.post("/empirical/function_points", response_model=EstimationPublic)
 def function_points_estimate(estimation: FunctionPointsCreate, session: SessionDep) -> EstimationPublic:
     # calculate
-    effort = function_points_model(estimation.size, estimation.complexity)
+    res = function_points_model(estimation.size, estimation.complexity)
     # database
-    db_estimation = common_db_post(effort, estimation, session)
+    db_estimation = common_db_post(res, estimation, session)
     return db_estimation
 
+
 # 2. Heuristic Estimation
-def expert_judgment(size: float, experience: int) -> float:
+def expert_judgment(size: float, experience: int) -> Dict:
     """
     假设专家基于规模和经验给出估计：
     规模越大，人月越多；经验越丰富，效率越高（人月减少）
@@ -92,19 +105,23 @@ def expert_judgment(size: float, experience: int) -> float:
     base = size * 1.1
     adjustment = max(0.5, 3 - experience) * 0.3  # 经验越高调整越小
     effort = base * adjustment
-    return effort
+    res = {
+        "effort": effort,
+        "time": -1,
+    }
+    return res
+
 
 @router.post("/heuristic/expert", response_model=EstimationPublic)
 def expert_judgment_estimate(estimation: ExpertCreate, session: SessionDep) -> EstimationPublic:
-
     # calculate
-    effort = expert_judgment(estimation.size, estimation.experience)
+    res = expert_judgment(estimation.size, estimation.experience)
     # database
-    db_estimation = common_db_post(effort, estimation, session)
+    db_estimation = common_db_post(res, estimation, session)
     return db_estimation
 
 
-def delphi_method(size: float, rounds: int = 3) -> float:
+def delphi_method(size: float, rounds: int = 3) -> Dict:
     """
     Delphi法：多轮专家估计后取均值
     这里用随机模拟多次估计后取平均
@@ -115,22 +132,27 @@ def delphi_method(size: float, rounds: int = 3) -> float:
         noise = random.uniform(-0.2, 0.2)  # +/-20%波动
         estimate = size * (1.0 + noise)
         estimates.append(estimate)
-    return sum(estimates) / rounds
+    effort = sum(estimates) / rounds
+    res = {
+        "effort": effort,
+        "time": -1,
+    }
+    return res
 
 
 @router.post("/heuristic/delphi", response_model=EstimationPublic)
 def delphi_method_estimate(estimation: DelphiCreate, session: SessionDep) -> EstimationPublic:
     # calculate
-    effort = expert_judgment(estimation.size, estimation.experience)
+    res = expert_judgment(estimation.size, estimation.experience)
     # database
-    db_estimation = common_db_post(effort, estimation, session)
+    db_estimation = common_db_post(res, estimation, session)
     return db_estimation
 
 
 # 3. Analytical Mathematical Models
 
 
-def regression_analysis(size: float, history: List[Tuple[float, float]]) -> float:
+def regression_analysis(size: float, history: List[Tuple[float, float]]) -> Dict:
     """
     用历史数据做线性回归 y = a * x + b
     返回对应size的估计effort
@@ -140,13 +162,17 @@ def regression_analysis(size: float, history: List[Tuple[float, float]]) -> floa
     A = np.vstack([X, np.ones(len(X))]).T
     a, b = np.linalg.lstsq(A, Y, rcond=None)[0]
     effort = a * size + b
-    return effort
+    res = {
+        "effort": effort,
+        "time": -1,
+    }
+    return res
 
 
 @router.post("/mathematical/regression", response_model=EstimationPublic)
 def regression_analysis_estimate(estimation: RegressionCreate, session: SessionDep) -> EstimationPublic:
     # calculate
-    effort = regression_analysis(estimation.size, estimation.historical_data)
+    res = regression_analysis(estimation.size, estimation.historical_data)
     # database
-    db_estimation = common_db_post(effort, estimation, session)
+    db_estimation = common_db_post(res, estimation, session)
     return db_estimation
