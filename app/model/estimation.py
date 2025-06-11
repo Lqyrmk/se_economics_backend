@@ -14,6 +14,7 @@ class Estimation(EstimationBase, table=True):
     effort: Optional[float] = Field(default=None)
     time: Optional[float] = Field(default=None)
 
+
 class CocomoCreate(EstimationBase):
     method: Optional[str] = Field(default="cocomo")
     complexity: Optional[str] = Field(default="medium")  # low/medium/high
@@ -31,7 +32,7 @@ class ExpertCreate(EstimationBase):
 
 class DelphiCreate(EstimationBase):
     method: Optional[str] = Field(default="delphi")
-    experience: Optional[int] = Field(default=3, ge=0)
+    experience_list: List[int]
 
 
 class RegressionCreate(EstimationBase):
