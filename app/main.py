@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 
-from routers import estimation
+from routers import estimation, budget_cost
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.dependencies import create_db_and_tables
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(estimation.router)
+app.include_router(budget_cost.router)
 
 origins = [
     "http://localhost",
