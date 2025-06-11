@@ -62,7 +62,7 @@ class IRRCreate(BudgetCostBase):
 class IRRPublic(BudgetCostBase):
     method: str
     irr_value: float
-    msg: str
+    msg: str = "record"
 
 
 # Payback Period
@@ -81,7 +81,7 @@ class PaybackPeriodCreate(BudgetCostBase):
 class PaybackPeriodPublic(BudgetCostBase):
     method: str
     pp_value: float
-    msg: str
+    msg: str = "record"
 
 
 class ForecastCreate(BudgetCostBase):

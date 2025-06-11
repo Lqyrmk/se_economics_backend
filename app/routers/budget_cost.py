@@ -2,8 +2,9 @@ import numpy as np
 import numpy_financial as npf
 
 from sklearn.linear_model import LinearRegression
-from fastapi import APIRouter
-from typing import List
+from fastapi import APIRouter, Query
+from sqlmodel import select
+from typing import List, Annotated
 
 from app.dependencies import SessionDep
 from app.model.budget_cost import ROI, ROICreate, ROIPublic, NPV, NPVCreate, NPVPublic, IRR, IRRCreate, IRRPublic, \
@@ -14,6 +15,19 @@ router = APIRouter(
     tags=["budget_cost"],
     responses={404: {"description": "Not found"}},
 )
+
+
+@router.get("/roi", response_model=list[ROIPublic])
+def read_roi_records(
+        session: SessionDep,
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+):
+    """
+    Show all record.
+    """
+    roi_records = session.exec(select(ROI).offset(offset).limit(limit)).all()
+    return roi_records
 
 
 def roi(gain: float, cost: float) -> float:
@@ -32,6 +46,19 @@ def roi_calculate(cost: ROICreate, session: SessionDep) -> ROIPublic:
     return db_cost
 
 
+@router.get("/npv", response_model=list[NPVPublic])
+def read_npv_records(
+        session: SessionDep,
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+):
+    """
+    Show all record.
+    """
+    npv_records = session.exec(select(NPV).offset(offset).limit(limit)).all()
+    return npv_records
+
+
 def npv(c: List[float], r: float) -> float:
     return sum(r_t / (1 + r) ** t for t, r_t in enumerate(c, start=1)) - c[0]
 
@@ -46,6 +73,19 @@ def npv_calculate(cost: NPVCreate, session: SessionDep) -> NPVPublic:
     session.commit()
     session.refresh(db_cost)
     return db_cost
+
+
+@router.get("/irr", response_model=list[IRRPublic])
+def read_irr_records(
+        session: SessionDep,
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+):
+    """
+    Show all record.
+    """
+    irr_records = session.exec(select(IRR).offset(offset).limit(limit)).all()
+    return irr_records
 
 
 @router.post("/irr", response_model=IRRPublic)
@@ -70,6 +110,20 @@ def payback_period(cash_flows: List[float]):
         if cumulative >= 0:
             return i
     return None
+
+
+@router.get("/pp", response_model=list[PaybackPeriodPublic])
+def read_pp_records(
+        session: SessionDep,
+        offset: int = 0,
+        limit: Annotated[int, Query(le=100)] = 100,
+):
+    """
+    Show all record.
+    """
+    pp_records = session.exec(select(PaybackPeriod).offset(offset).limit(limit)).all()
+    return pp_records
+
 
 @router.post("/pp", response_model=PaybackPeriodPublic)
 def payback_period_calculate(cost: PaybackPeriodCreate, session: SessionDep) -> PaybackPeriodPublic:
@@ -100,4 +154,3 @@ def forecast_costs(cost: ForecastCreate, session: SessionDep) -> ForecastPublic:
     if res is None:
         return ForecastPublic(method="forecast", res=None, msg="Incorrect input value or the model dose not work")
     return ForecastPublic(method="forecast", res=float(res[-1]), msg="Has been solved")
-
