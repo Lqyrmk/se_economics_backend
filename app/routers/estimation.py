@@ -93,9 +93,9 @@ def function_points_analysis(fp: float, complexity: str) -> Dict:
     :return: res
     """
     multipliers = {
-        "low": 1.0,
-        "medium": 1.2,
-        "high": 1.5
+        "organic": 1.0,
+        "semi": 1.2,
+        "embedded": 1.5
     }
     multiplier = multipliers.get(complexity, 1.2)
     effort = fp * multiplier
@@ -106,7 +106,7 @@ def function_points_analysis(fp: float, complexity: str) -> Dict:
     return res
 
 
-@router.post("/empirical/function_points", response_model=EstimationPublic)
+@router.post("/empirical/fpa", response_model=EstimationPublic)
 def function_points_estimate(estimation: FunctionPointsCreate, session: SessionDep) -> EstimationPublic:
     """
     Interface of Function Points Analysis (FPA)
@@ -159,10 +159,16 @@ def delphi_method(size: float, experience_list: List[int]) -> Dict:
     :param experience_list: multiple experience levels in multiple rounds of evaluation
     :return: res
     """
-    effort = sum(expert_judgment(size, e) for e in experience_list) / len(experience_list)
+    total_effort = 0
+    total_time = 0
+    for e in experience_list:
+        res = expert_judgment(size, e)
+        total_effort += res["effort"]
+        total_time += res["time"]
+    n = len(experience_list)
     res = {
-        "effort": effort,
-        "time": -1,
+        "effort": total_effort / n,
+        "time": total_time / n,
     }
     return res
 
@@ -173,7 +179,9 @@ def delphi_method_estimate(estimation: DelphiCreate, session: SessionDep) -> Est
     Interface of Delphi Method Estimation
     """
     # calculate
-    res = expert_judgment(estimation.size, estimation.experience_list)
+    res = delphi_method(estimation.size, estimation.experience_list)
+    # just record the average of all experience
+    estimation.experience = sum(estimation.experience_list) / len(estimation.experience_list)
     # database
     db_estimation = common_db_post(res, estimation, session)
     return db_estimation
